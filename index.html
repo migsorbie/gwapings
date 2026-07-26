@@ -1,325 +1,195 @@
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Almanac — League Record Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
 
-// ---------------------------------------------------------------------------
-// Tab navigation
-// ---------------------------------------------------------------------------
-const tabButtons = document.querySelectorAll(".tab-btn");
-const views = document.querySelectorAll(".view");
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-mark">☰</span>
+      <h1>THE <span>ALMANAC</span></h1>
+    </div>
+    <nav class="tab-nav" id="tab-nav">
+      <button class="tab-btn active" data-view="history">League History</button>
+      <button class="tab-btn" data-view="teams">Teams</button>
+      <button class="tab-btn" data-view="players">Players</button>
+      <button class="tab-btn" data-view="matchups">Matchups</button>
+    </nav>
+  </div>
+</header>
 
-tabButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    tabButtons.forEach((b) => b.classList.remove("active"));
-    views.forEach((v) => v.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(`view-${btn.dataset.view}`).classList.add("active");
-  });
-});
+<main id="app">
 
-function fmtPct(p) {
-  if (p === null || p === undefined) return "—";
-  return (p * 100).toFixed(1) + "%";
-}
-function fmtNum(n, digits = 1) {
-  if (n === null || n === undefined) return "—";
-  return Number(n).toFixed(digits);
-}
-function val(v) { return v === null || v === undefined || v === "" ? "—" : v; }
+  <p class="error-banner hidden" id="error-banner"></p>
 
-function reportError(context, error) {
-  console.error(context, error);
-  const banner = document.getElementById("error-banner");
-  if (banner) {
-    banner.textContent = `Couldn't load ${context}. Check js/config.js has the right Supabase URL/key, and that supabase/schema.sql has been run. (${error.message || error})`;
-    banner.classList.remove("hidden");
-  }
-}
+  <!-- ============ LEAGUE HISTORY ============ -->
+  <section class="view active" id="view-history">
+    <div class="view-heading">
+      <span class="eyebrow">Record Book</span>
+      <h2>League History</h2>
+      <p class="sub">Every champion, every rematch, every reign.</p>
+    </div>
+    <div class="banner-rail" id="banner-rail"><!-- championship banners injected here --></div>
+    <div class="table-wrap">
+      <table class="ledger-table" id="history-table">
+        <thead>
+          <tr>
+            <th class="num">Season</th>
+            <th>Champion</th>
+            <th class="num">Reign #</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </section>
 
-// ===========================================================================
-// LEAGUE HISTORY
-// ===========================================================================
-async function loadLeagueHistory() {
-  const { data, error } = await supabase
-    .from("v_league_history")
-    .select("*")
-    .order("season_year", { ascending: false });
+  <!-- ============ TEAMS ============ -->
+  <section class="view" id="view-teams">
+    <div class="view-heading">
+      <span class="eyebrow">Franchise Files</span>
+      <h2>Teams</h2>
+      <p class="sub">Pick a franchise to see its history, or a season to see its roster.</p>
+    </div>
 
-  if (error) return reportError("league history", error);
+    <div class="team-picker" id="team-picker"><!-- team chips injected here --></div>
 
-  const bannerRail = document.getElementById("banner-rail");
-  bannerRail.innerHTML = data
-    .map(
-      (row) => `
-      <div class="banner">
-        <div class="banner-year">${row.season_year}</div>
-        <div class="banner-name">${row.champion_name || "—"}</div>
-        <div class="banner-reign">${row.reign_number ? `Reign #${row.reign_number}` : ""}</div>
-      </div>`
-    )
-    .join("");
+    <div id="team-detail" class="team-detail hidden">
+      <div class="team-detail-header">
+        <h3 id="team-detail-name">—</h3>
+        <span class="status-pill" id="team-detail-status">active</span>
+      </div>
 
-  const tbody = document.getElementById("history-tbody");
-  tbody.innerHTML = data
-    .map(
-      (row) => `
-      <tr>
-        <td class="num">${row.season_year}</td>
-        <td class="champ-name">${row.champion_name || "—"}</td>
-        <td class="num">${val(row.reign_number)}</td>
-        <td>${val(row.result_text)}</td>
-      </tr>`
-    )
-    .join("");
-}
+      <h4 class="subhead">Season by Season</h4>
+      <div class="table-wrap">
+        <table class="ledger-table" id="team-seasons-table">
+          <thead>
+            <tr>
+              <th class="num">Year</th>
+              <th>Team Name</th>
+              <th class="num">W</th>
+              <th class="num">L</th>
+              <th class="num">Pct</th>
+              <th class="num">FPPG</th>
+              <th class="num">Rank</th>
+              <th>Playoff Result</th>
+              <th>GM</th>
+            </tr>
+          </thead>
+          <tbody id="team-seasons-tbody"></tbody>
+        </table>
+      </div>
 
-// ===========================================================================
-// TEAMS
-// ===========================================================================
-let allTeams = [];
+      <div class="roster-block">
+        <div class="roster-header">
+          <h4 class="subhead">Roster</h4>
+          <select id="roster-season-select" class="season-select"></select>
+        </div>
+        <div class="table-wrap">
+          <table class="ledger-table mono-table" id="roster-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th class="num">Age</th>
+                <th>Pos</th>
+                <th>NBA Team</th>
+                <th class="num">GP</th>
+                <th class="num">MPG</th>
+                <th class="num">FPPG</th>
+                <th class="num">FPPM</th>
+              </tr>
+            </thead>
+            <tbody id="roster-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
 
-async function loadTeams() {
-  const { data, error } = await supabase.from("v_teams").select("*").order("latest_name");
-  if (error) return reportError("teams", error);
-  allTeams = data;
+  <!-- ============ PLAYERS ============ -->
+  <section class="view" id="view-players">
+    <div class="view-heading">
+      <span class="eyebrow">Player Files</span>
+      <h2>Players</h2>
+      <p class="sub">Search a player to trace their whole fantasy-league journey.</p>
+    </div>
 
-  const picker = document.getElementById("team-picker");
-  picker.innerHTML = allTeams
-    .map(
-      (t) => `
-      <div class="team-chip ${t.status === "defunct" ? "defunct" : ""}" data-team-id="${t.team_id}">
-        <span class="dot"></span>${t.latest_name}
-      </div>`
-    )
-    .join("");
+    <div class="player-search-row">
+      <input type="text" id="player-search" class="text-input" placeholder="Search players…" autocomplete="off">
+      <div class="player-results" id="player-results"></div>
+    </div>
 
-  picker.querySelectorAll(".team-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      picker.querySelectorAll(".team-chip").forEach((c) => c.classList.remove("active"));
-      chip.classList.add("active");
-      openTeam(chip.dataset.teamId);
-    });
-  });
+    <div id="player-detail" class="player-detail hidden">
+      <div class="team-detail-header">
+        <h3 id="player-detail-name">—</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="ledger-table mono-table" id="player-seasons-table">
+          <thead>
+            <tr>
+              <th class="num">Season</th>
+              <th>Fantasy Team</th>
+              <th>Result</th>
+              <th class="num">FPPG</th>
+              <th class="num">FPPM</th>
+              <th class="num">MPG</th>
+              <th>NBA Team</th>
+              <th>GM</th>
+            </tr>
+          </thead>
+          <tbody id="player-seasons-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
-  populateMatchupSelects();
+  <!-- ============ MATCHUPS ============ -->
+  <section class="view" id="view-matchups">
+    <div class="view-heading">
+      <span class="eyebrow">Head to Head</span>
+      <h2>Team Matchups</h2>
+      <p class="sub">Playoff series between any two franchises, pulled straight from the season record.</p>
+    </div>
 
-  if (allTeams.length) {
-    picker.querySelector(".team-chip").classList.add("active");
-    openTeam(allTeams[0].team_id);
-  }
-}
+    <div class="matchup-picker">
+      <select id="matchup-team-a" class="season-select"></select>
+      <span class="vs">VS</span>
+      <select id="matchup-team-b" class="season-select"></select>
+    </div>
 
-async function openTeam(teamId) {
-  const [{ data: team, error: teamErr }, { data: seasons, error: seasonsErr }] = await Promise.all([
-    supabase.from("teams").select("*").eq("team_id", teamId).single(),
-    supabase.from("v_team_seasons").select("*").eq("team_id", teamId).order("season_year", { ascending: false }),
-  ]);
-  if (teamErr) return reportError("team detail", teamErr);
-  if (seasonsErr) return reportError("team seasons", seasonsErr);
+    <div class="table-wrap">
+      <table class="ledger-table" id="matchup-table">
+        <thead>
+          <tr>
+            <th class="num">Season</th>
+            <th>Round</th>
+            <th>Matchup</th>
+            <th>Winner</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="matchup-tbody"></tbody>
+      </table>
+    </div>
+    <p class="empty-state hidden" id="matchup-empty">No playoff meetings between these two — yet.</p>
+  </section>
 
-  document.getElementById("team-detail").classList.remove("hidden");
-  document.getElementById("team-detail-name").textContent =
-    seasons[0] ? seasons[0].season_team_name : `Team #${teamId}`;
-  const statusPill = document.getElementById("team-detail-status");
-  statusPill.textContent = team.status;
-  statusPill.className = "status-pill" + (team.status === "defunct" ? " defunct" : "");
+</main>
 
-  const tbody = document.getElementById("team-seasons-tbody");
-  tbody.innerHTML = seasons
-    .map(
-      (s) => `
-      <tr>
-        <td class="num">${s.season_year}</td>
-        <td>${s.season_team_name}</td>
-        <td class="num">${s.wins}</td>
-        <td class="num">${s.losses}</td>
-        <td class="num">${fmtPct(s.win_pct)}</td>
-        <td class="num">${fmtNum(s.team_fppg, 2)}</td>
-        <td class="num">${val(s.season_rank)}</td>
-        <td>${val(s.playoff_result)}</td>
-        <td>${val(s.gm)}</td>
-      </tr>`
-    )
-    .join("");
+<footer class="site-footer">
+  <p>The Almanac · league records, kept honestly.</p>
+</footer>
 
-  const seasonSelect = document.getElementById("roster-season-select");
-  seasonSelect.innerHTML = seasons
-    .map((s) => `<option value="${s.season_year}">${s.season_year}</option>`)
-    .join("");
-  seasonSelect.onchange = () => loadRoster(teamId, seasonSelect.value);
-
-  if (seasons.length) {
-    loadRoster(teamId, seasons[0].season_year);
-  } else {
-    document.getElementById("roster-tbody").innerHTML = "";
-  }
-}
-
-async function loadRoster(teamId, season) {
-  const { data, error } = await supabase
-    .from("v_team_roster")
-    .select("*")
-    .eq("team_id", teamId)
-    .eq("season_year", season)
-    .order("fppg", { ascending: false, nullsFirst: false });
-
-  const tbody = document.getElementById("roster-tbody");
-  if (error) return reportError("roster", error);
-  if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="8">No roster on file for ${season}.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = data
-    .map(
-      (p) => `
-      <tr>
-        <td>${p.player_name}</td>
-        <td class="num">${val(p.age)}</td>
-        <td>${val(p.position)}</td>
-        <td>${val(p.nba_team)}</td>
-        <td class="num">${val(p.games_played)}</td>
-        <td class="num">${fmtNum(p.mpg, 1)}</td>
-        <td class="num">${fmtNum(p.fppg, 2)}</td>
-        <td class="num">${fmtNum(p.fppm, 3)}</td>
-      </tr>`
-    )
-    .join("");
-}
-
-// ===========================================================================
-// PLAYERS
-// ===========================================================================
-const playerSearch = document.getElementById("player-search");
-const playerResults = document.getElementById("player-results");
-let searchDebounce;
-
-playerSearch.addEventListener("input", () => {
-  clearTimeout(searchDebounce);
-  const q = playerSearch.value.trim();
-  searchDebounce = setTimeout(() => searchPlayers(q), 200);
-});
-
-document.addEventListener("click", (e) => {
-  if (!playerResults.contains(e.target) && e.target !== playerSearch) {
-    playerResults.classList.remove("open");
-  }
-});
-
-async function searchPlayers(q) {
-  let query = supabase.from("players").select("player_id, player_name").order("player_name").limit(20);
-  if (q) query = query.ilike("player_name", `%${q}%`);
-  const { data, error } = await query;
-  if (error) return reportError("player search", error);
-
-  if (!data.length) {
-    playerResults.classList.remove("open");
-    return;
-  }
-  playerResults.innerHTML = data
-    .map((p) => `<div class="player-result-item" data-player-id="${p.player_id}">${p.player_name}</div>`)
-    .join("");
-  playerResults.classList.add("open");
-  playerResults.querySelectorAll(".player-result-item").forEach((item) => {
-    item.addEventListener("click", () => {
-      playerSearch.value = item.textContent;
-      playerResults.classList.remove("open");
-      openPlayer(item.dataset.playerId);
-    });
-  });
-}
-
-async function openPlayer(playerId) {
-  const { data, error } = await supabase
-    .from("v_player_seasons")
-    .select("*")
-    .eq("player_id", playerId)
-    .order("season_year", { ascending: false });
-  if (error) return reportError("player detail", error);
-
-  document.getElementById("player-detail").classList.remove("hidden");
-  document.getElementById("player-detail-name").textContent = data[0] ? data[0].player_name : `Player #${playerId}`;
-
-  const tbody = document.getElementById("player-seasons-tbody");
-  if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="8">No seasons on file.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = data
-    .map(
-      (s) => `
-      <tr>
-        <td class="num">${s.season_year}</td>
-        <td>${val(s.fantasy_team_name)}</td>
-        <td>${val(s.playoff_result)}</td>
-        <td class="num">${fmtNum(s.fppg, 2)}</td>
-        <td class="num">${fmtNum(s.fppm, 3)}</td>
-        <td class="num">${fmtNum(s.mpg, 1)}</td>
-        <td>${val(s.nba_team)}</td>
-        <td>${val(s.gm)}</td>
-      </tr>`
-    )
-    .join("");
-}
-
-// ===========================================================================
-// MATCHUPS
-// ===========================================================================
-function populateMatchupSelects() {
-  const a = document.getElementById("matchup-team-a");
-  const b = document.getElementById("matchup-team-b");
-  const options = allTeams
-    .map((t) => `<option value="${t.team_id}">${t.latest_name}</option>`)
-    .join("");
-  a.innerHTML = options;
-  b.innerHTML = options;
-  if (allTeams.length > 1) b.selectedIndex = 1;
-
-  const trigger = () => loadHeadToHead(a.value, b.value);
-  a.onchange = trigger;
-  b.onchange = trigger;
-  trigger();
-}
-
-async function loadHeadToHead(teamA, teamB) {
-  const tbody = document.getElementById("matchup-tbody");
-  const empty = document.getElementById("matchup-empty");
-  if (!teamA || !teamB || teamA === teamB) {
-    tbody.innerHTML = "";
-    empty.classList.remove("hidden");
-    empty.textContent = teamA === teamB ? "Pick two different franchises." : "No playoff meetings between these two — yet.";
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("v_matchups")
-    .select("*")
-    .or(
-      `and(team1_id.eq.${teamA},team2_id.eq.${teamB}),and(team1_id.eq.${teamB},team2_id.eq.${teamA})`
-    )
-    .order("season_year", { ascending: false });
-  if (error) return reportError("matchups", error);
-
-  if (!data.length) {
-    tbody.innerHTML = "";
-    empty.classList.remove("hidden");
-    empty.textContent = "No playoff meetings between these two — yet.";
-    return;
-  }
-  empty.classList.add("hidden");
-  tbody.innerHTML = data
-    .map(
-      (m) => `
-      <tr>
-        <td class="num">${m.season_year}</td>
-        <td>${m.round_name}</td>
-        <td>${val(m.team1_name)} vs ${val(m.team2_name)}</td>
-        <td class="winner-cell">${val(m.winner_name)}</td>
-        <td>${val(m.result_text)}</td>
-      </tr>`
-    )
-    .join("");
-}
-
-// ===========================================================================
-// Init
-// ===========================================================================
-loadLeagueHistory();
-loadTeams();
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
