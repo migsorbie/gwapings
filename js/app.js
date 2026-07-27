@@ -1,4 +1,4 @@
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---------------------------------------------------------------------------
 // Tab navigation
@@ -38,7 +38,7 @@ function reportError(context, error) {
 // LEAGUE HISTORY
 // ===========================================================================
 async function loadLeagueHistory() {
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("v_league_history")
     .select("*")
     .order("season_year", { ascending: false });
@@ -77,7 +77,7 @@ async function loadLeagueHistory() {
 let allTeams = [];
 
 async function loadTeams() {
-  const { data, error } = await supabase.from("v_teams").select("*").order("latest_name");
+  const { data, error } = await sb.from("v_teams").select("*").order("latest_name");
   if (error) return reportError("teams", error);
   allTeams = data;
 
@@ -109,8 +109,8 @@ async function loadTeams() {
 
 async function openTeam(teamId) {
   const [{ data: team, error: teamErr }, { data: seasons, error: seasonsErr }] = await Promise.all([
-    supabase.from("teams").select("*").eq("team_id", teamId).single(),
-    supabase.from("v_team_seasons").select("*").eq("team_id", teamId).order("season_year", { ascending: false }),
+    sb.from("teams").select("*").eq("team_id", teamId).single(),
+    sb.from("v_team_seasons").select("*").eq("team_id", teamId).order("season_year", { ascending: false }),
   ]);
   if (teamErr) return reportError("team detail", teamErr);
   if (seasonsErr) return reportError("team seasons", seasonsErr);
@@ -154,7 +154,7 @@ async function openTeam(teamId) {
 }
 
 async function loadRoster(teamId, season) {
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("v_team_roster")
     .select("*")
     .eq("team_id", teamId)
@@ -204,7 +204,7 @@ document.addEventListener("click", (e) => {
 });
 
 async function searchPlayers(q) {
-  let query = supabase.from("players").select("player_id, player_name").order("player_name").limit(20);
+  let query = sb.from("players").select("player_id, player_name").order("player_name").limit(20);
   if (q) query = query.ilike("player_name", `%${q}%`);
   const { data, error } = await query;
   if (error) return reportError("player search", error);
@@ -227,7 +227,7 @@ async function searchPlayers(q) {
 }
 
 async function openPlayer(playerId) {
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("v_player_seasons")
     .select("*")
     .eq("player_id", playerId)
@@ -288,7 +288,7 @@ async function loadHeadToHead(teamA, teamB) {
     return;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("v_matchups")
     .select("*")
     .or(
